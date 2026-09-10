@@ -709,9 +709,6 @@ def main():
         print("      %s" % os.path.basename(ruta))
     print()
     print("=" * 70)
-    print(" Tome la captura de pantalla de esta ventana: es la prueba")
-    print(" de ejecucion que pide el enunciado.")
-    print("=" * 70)
     print()
 
 
