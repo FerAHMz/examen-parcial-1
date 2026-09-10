@@ -17,15 +17,14 @@ float tempAux[MAX]; // Arreglo auxiliar usado por Merge() para fusionar los
 int histograma[CUBETAS]; // Contador de frecuencias por cada cubeta del
                          // histograma
 
-int N;      // Cantidad total de temperaturas
-int i;      // Índice general de recorrido
-int cubeta; // Cubeta actual que se está llenando en el histograma
+int N; // Cantidad total de temperaturas
 
-int izq; // Límite izquierdo (se reutiliza en distintos contextos)
-int der; // Límite derecho (se reutiliza en distintos contextos)
-
-float limInf; // Límite inferior de la cubeta actual del histograma
-float limSup; // Límite superior de la cubeta actual del histograma
+/*
+ * Los índices de recorrido y los límites de cubeta se declaran dentro de cada
+ * función que los usa. Como globales obligaban al compilador a releerlos de
+ * memoria en cada vuelta del ciclo, porque no podía descartar que escribir en
+ * histograma[cubeta] los modificara. Siendo locales viven en registros.
+ */
 
 // MERGE
 // Combina dos mitades ya ordenadas (arreglo[izq..centro]
@@ -109,6 +108,9 @@ void MergeSort(float arreglo[], int izq, int der) {
 // ya está ordenado (no hace falta buscar, solo avanzar).
 
 void Histograma() {
+  int i, cubeta;
+  float limInf, limSup;
+
   // Se inicializan todas las cubetas en cero
   for (i = 0; i < CUBETAS; i++)
     histograma[i] = 0;
@@ -192,6 +194,8 @@ static int ejecutarBenchmark(int cantidad, int repeticiones,
     return 1;
   }
 
+  int i;
+
   N = cantidad;
   srand(semilla);
   for (i = 0; i < N; i++) {
@@ -248,6 +252,8 @@ int main(int argc, char *argv[]) {
                                        : 20260909U;
     return ejecutarBenchmark(cantidad, repeticiones, semilla);
   }
+
+  int i;
 
   srand(time(NULL));
 
