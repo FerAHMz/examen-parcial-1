@@ -1,6 +1,7 @@
 #include <omp.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 #include <time.h>
 
 #define MAX 1000000
@@ -225,7 +226,76 @@ void HistogramaParalelo(int numHilos) {
   free(histogramasLocales);
 }
 
-int main() {
+/*
+ * Modo no interactivo utilizado por pruebas_rendimiento.py. Emplea la misma
+ * semilla que el secuencial y mide solo la fase que fue paralelizada.
+ */
+static int ejecutarBenchmark(int cantidad, int numHilos, int repeticiones,
+                             unsigned int semilla) {
+  if (cantidad <= 0 || cantidad > MAX || numHilos <= 0 || repeticiones <= 0) {
+    fprintf(stderr, "Parametros de benchmark invalidos.\n");
+    return 1;
+  }
+
+  N = cantidad;
+  /* Sin esto OpenMP puede ajustar el tamano del equipo por su cuenta y la
+   * medicion no correria con la cantidad de hilos que se pidio. */
+  omp_set_dynamic(0);
+  srand(semilla);
+  for (int i = 0; i < N; i++) {
+    A[i] = -100.0 + (rand() % 20001) / 100.0;
+    temp[i] = A[i];
+  }
+  MergeSort(temp, 0, N - 1);
+
+  /* Promedia varias llamadas para que la fase corta supere la resolucion del reloj. */
+  int iteracionesInternas = 100000000 / N;
+  if (iteracionesInternas < 1) iteracionesInternas = 1;
+  if (iteracionesInternas > 1000) iteracionesInternas = 1000;
+  double mejorFase = 1e30;
+  for (int repeticion = 0; repeticion < repeticiones; repeticion++) {
+    double inicio = omp_get_wtime();
+    for (int interna = 0; interna < iteracionesInternas; interna++)
+      HistogramaParalelo(numHilos);
+    double promedio = (omp_get_wtime() - inicio) / iteracionesInternas;
+    if (promedio < mejorFase)
+      mejorFase = promedio;
+  }
+
+  /*
+   * total confirma que no se perdio ningun dato. checksum pondera cada cubeta
+   * por su indice, de modo que delata un conteo mal repartido aunque el total
+   * cuadre: es la comprobacion de que los histogramas locales se combinaron
+   * bien y ningun hilo piso el contador de otro.
+   */
+  long long total = 0;
+  long long checksum = 0;
+  for (int c = 0; c < CUBETAS; c++) {
+    total += histograma[c];
+    checksum += (long long)(c + 1) * histograma[c];
+  }
+
+  /* Linea que lee pruebas_rendimiento.py. Campos: problema, version, N,
+   * hilos, repeticiones, iteraciones internas, tiempo de una llamada,
+   * datos contabilizados y checksum. Debe coincidir con el del secuencial. */
+  printf("RESULTADO,histograma,paralelo,%d,%d,%d,%d,%.9f,%lld,%lld\n",
+         N, numHilos, repeticiones, iteracionesInternas, mejorFase, total,
+         checksum);
+  return total == N ? 0 : 1;
+}
+
+int main(int argc, char *argv[]) {
+  /* Con --benchmark ejecuta la medicion y termina. Sin argumentos sigue de
+   * largo al modo interactivo original, que no fue modificado. */
+  if (argc > 1 && strcmp(argv[1], "--benchmark") == 0) {
+    int cantidad = (argc > 2) ? atoi(argv[2]) : MAX;
+    int numHilos = (argc > 3) ? atoi(argv[3]) : omp_get_max_threads();
+    int repeticiones = (argc > 4) ? atoi(argv[4]) : 10;
+    unsigned int semilla = (argc > 5) ? (unsigned int)strtoul(argv[5], NULL, 10)
+                                       : 20260909U;
+    return ejecutarBenchmark(cantidad, numHilos, repeticiones, semilla);
+  }
+
   int i;
   int numHilos;
 
