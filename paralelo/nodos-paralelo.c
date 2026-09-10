@@ -458,7 +458,7 @@ int main(int argc, char **argv) {
     printf("%-8s %-14s %-12s %-12s %-10s\n",
            "Hilos", "Tiempo (s)", "Speedup", "Eficiencia", "Correcto");
     printf("---------------------------------------------------------------\n");
-    printf("%-8s %-14.4f %-12s %-12s %-10s\n", "1 (sec)", tSecuencial, "1.00", "100.0%", "-");
+    printf("%-8s %-14.6f %-12s %-12s %-10s\n", "1 (sec)", tSecuencial, "1.00", "100.0%", "-");
 
     /* Version paralela con una cantidad creciente de hilos. */
     for (int h = 1; h <= maxHilos; h = (h == 1) ? 2 : h + 2) {
@@ -476,7 +476,7 @@ int main(int argc, char **argv) {
         char etiqueta[16], textoEficiencia[16];
         snprintf(etiqueta, sizeof(etiqueta), "%d", h);
         snprintf(textoEficiencia, sizeof(textoEficiencia), "%.1f%%", eficiencia);
-        printf("%-8s %-14.4f %-12.2f %-12s %-10s\n",
+        printf("%-8s %-14.6f %-12.4f %-12s %-10s\n",
                etiqueta, tParalelo, speedup, textoEficiencia,
                errores == 0 ? "si" : "NO");
         if (errores)
