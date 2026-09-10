@@ -1,5 +1,7 @@
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
+#include <sys/time.h>
 #include <time.h>
 
 #define MAX 1000000
@@ -167,7 +169,86 @@ void Histograma() {
   }
 }
 
-int main() {
+/*
+ * Reloj de pared, el mismo criterio que usa omp_get_wtime() en la version
+ * paralela. No se emplea clock() porque mide tiempo de CPU: al sumar el de
+ * todos los hilos, las dos versiones no quedarian comparables.
+ */
+static double tiempoActual(void) {
+  struct timeval instante;
+  gettimeofday(&instante, NULL);
+  return (double)instante.tv_sec + (double)instante.tv_usec / 1000000.0;
+}
+
+/*
+ * Modo no interactivo utilizado por pruebas_rendimiento.py. La generacion y
+ * el ordenamiento quedan fuera de la medicion porque la version paralela solo
+ * optimiza la construccion del histograma.
+ */
+static int ejecutarBenchmark(int cantidad, int repeticiones,
+                             unsigned int semilla) {
+  if (cantidad <= 0 || cantidad > MAX || repeticiones <= 0) {
+    fprintf(stderr, "Parametros de benchmark invalidos.\n");
+    return 1;
+  }
+
+  N = cantidad;
+  srand(semilla);
+  for (i = 0; i < N; i++) {
+    A[i] = -100.0 + (rand() % 20001) / 100.0;
+    temp[i] = A[i];
+  }
+  MergeSort(temp, 0, N - 1);
+
+  /*
+   * La fase aislada es muy corta con MAX elementos. Se repite hasta procesar
+   * aproximadamente cien millones de datos por lote y se reporta el tiempo
+   * medio de una llamada; asi se reduce el error del reloj.
+   */
+  int iteracionesInternas = 100000000 / N;
+  if (iteracionesInternas < 1) iteracionesInternas = 1;
+  if (iteracionesInternas > 1000) iteracionesInternas = 1000;
+  double mejorFase = 1e30;
+  for (int repeticion = 0; repeticion < repeticiones; repeticion++) {
+    double inicio = tiempoActual();
+    for (int interna = 0; interna < iteracionesInternas; interna++)
+      Histograma();
+    double promedio = (tiempoActual() - inicio) / iteracionesInternas;
+    if (promedio < mejorFase)
+      mejorFase = promedio;
+  }
+
+  /*
+   * total confirma que no se perdio ningun dato. checksum pondera cada cubeta
+   * por su indice, de modo que delata un conteo mal repartido aunque el total
+   * cuadre: es la comprobacion contra condiciones de carrera en el paralelo.
+   */
+  long long total = 0;
+  long long checksum = 0;
+  for (int c = 0; c < CUBETAS; c++) {
+    total += histograma[c];
+    checksum += (long long)(c + 1) * histograma[c];
+  }
+
+  /* Linea que lee pruebas_rendimiento.py. Campos: problema, version, N,
+   * hilos, repeticiones, iteraciones internas, tiempo de una llamada,
+   * datos contabilizados y checksum. */
+  printf("RESULTADO,histograma,secuencial,%d,1,%d,%d,%.9f,%lld,%lld\n",
+         N, repeticiones, iteracionesInternas, mejorFase, total, checksum);
+  return total == N ? 0 : 1;
+}
+
+int main(int argc, char *argv[]) {
+  /* Con --benchmark ejecuta la medicion y termina. Sin argumentos sigue de
+   * largo al modo interactivo original, que no fue modificado. */
+  if (argc > 1 && strcmp(argv[1], "--benchmark") == 0) {
+    int cantidad = (argc > 2) ? atoi(argv[2]) : MAX;
+    int repeticiones = (argc > 3) ? atoi(argv[3]) : 10;
+    unsigned int semilla = (argc > 4) ? (unsigned int)strtoul(argv[4], NULL, 10)
+                                       : 20260909U;
+    return ejecutarBenchmark(cantidad, repeticiones, semilla);
+  }
+
   srand(time(NULL));
 
   printf("Cantidad de temperaturas: ");
