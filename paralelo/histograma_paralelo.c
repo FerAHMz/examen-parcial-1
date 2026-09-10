@@ -6,9 +6,7 @@
 #define MAX 1000000
 #define CUBETAS 100
 
-//==========================================================
 // VARIABLES GLOBALES
-//==========================================================
 
 float A[MAX];
 float temp[MAX];
@@ -18,12 +16,10 @@ int histograma[CUBETAS];
 
 int N;
 
-//==========================================================
 // MERGE
-//==========================================================
+
 // Fusiona dos mitades previamente ordenadas.
 // Esta parte sigue siendo SECUENCIAL.
-//==========================================================
 
 void Merge(float arreglo[], int izq, int centro, int der) {
   int i = izq;
@@ -63,11 +59,9 @@ void Merge(float arreglo[], int izq, int centro, int der) {
   }
 }
 
-//==========================================================
 // MERGESORT
-//==========================================================
+
 // Ordenamiento secuencial mediante Divide y Venceras.
-//==========================================================
 
 void MergeSort(float arreglo[], int izq, int der) {
   if (izq < der) {
@@ -86,12 +80,11 @@ void MergeSort(float arreglo[], int izq, int der) {
 
 //==========================================================
 // BUSQUEDA BINARIA
-//==========================================================
+
 // Como temp[] esta ordenado, esta funcion permite localizar
 // rapidamente donde comienza un determinado rango.
 //
 // Retorna la primera posicion donde temp[pos] >= valor.
-//==========================================================
 
 int BuscarInicio(float valor) {
   int izq = 0;
@@ -109,9 +102,7 @@ int BuscarInicio(float valor) {
   return izq;
 }
 
-//==========================================================
 // HISTOGRAMA PARALELO
-//==========================================================
 
 void HistogramaParalelo(int numHilos) {
   int h;
@@ -141,63 +132,23 @@ void HistogramaParalelo(int numHilos) {
     exit(1);
   }
 
-  //------------------------------------------------------
   // Inicializar histograma global
-  //------------------------------------------------------
-
   for (c = 0; c < CUBETAS; c++)
     histograma[c] = 0;
-
-  /*
-   * =====================================================
-   * REGION PARALELA
-   * =====================================================
-   *
-   * shared:
-   *   temp[]
-   *   histogramasLocales
-   *
-   * Todos los hilos pueden leer temp[] porque ya esta
-   * ordenado y nadie lo modifica.
-   *
-   * firstprivate:
-   *   minimo
-   *   maximo
-   *   ancho
-   *
-   * Cada hilo recibe su propia copia de estos valores.
-   *
-   * El "for" distribuye los trabajadores entre los hilos.
-   *
-   * schedule(static) es adecuado porque conocemos desde
-   * el inicio las 100 cubetas y su distribucion.
-   * =====================================================
-   */
 
 #pragma omp parallel for num_threads(numHilos) schedule(static)                \
     shared(histogramasLocales) firstprivate(minimo, maximo, ancho)
 
   for (h = 0; h < numHilos; h++) {
-    //--------------------------------------------------
-    // PASO DEL DIAGRAMA:
-    // "Asignar grupo de cubetas a cada trabajador"
-    //--------------------------------------------------
 
     int primeraCubeta = (h * CUBETAS) / numHilos;
 
     int ultimaCubeta = ((h + 1) * CUBETAS) / numHilos - 1;
 
-    //--------------------------------------------------
     // Cada hilo trabaja con SU histograma local.
-    //--------------------------------------------------
-
     int *histogramaLocal = &histogramasLocales[h * CUBETAS];
 
-    //--------------------------------------------------
     // Calcular el rango completo de temperaturas
-    // correspondiente a las cubetas asignadas.
-    //--------------------------------------------------
-
     float inicioTemperatura = minimo + primeraCubeta * ancho;
 
     float finTemperatura;
@@ -207,12 +158,9 @@ void HistogramaParalelo(int numHilos) {
     else
       finTemperatura = minimo + (ultimaCubeta + 1) * ancho;
 
-    //--------------------------------------------------
     // PASO DEL DIAGRAMA:
     // "Localizar en temp[] el inicio y fin del rango"
-    //
     // Aprovechamos que temp[] esta ordenado.
-    //--------------------------------------------------
 
     int inicioRango = BuscarInicio(inicioTemperatura);
 
@@ -223,32 +171,20 @@ void HistogramaParalelo(int numHilos) {
     else
       finRango = BuscarInicio(finTemperatura);
 
-    //--------------------------------------------------
-    // PASO DEL DIAGRAMA:
-    //
     // i = inicioRango
     // cubeta = primeraCubetaAsignada
-    //--------------------------------------------------
 
     int iLocal = inicioRango;
     int cubetaLocal = primeraCubeta;
 
-    //--------------------------------------------------
     // Calcular limites de la primera cubeta asignada
-    //--------------------------------------------------
-
     float limInf = minimo + cubetaLocal * ancho;
 
     float limSup = limInf + ancho;
-
-    //--------------------------------------------------
     // CICLO PRINCIPAL DEL TRABAJADOR
-    //--------------------------------------------------
 
     while (cubetaLocal <= ultimaCubeta && iLocal < finRango) {
-      //------------------------------------------------
       // ¿temp[i] pertenece a la cubeta actual?
-      //------------------------------------------------
 
       int pertenece;
 
@@ -260,57 +196,25 @@ void HistogramaParalelo(int numHilos) {
       }
 
       if (pertenece) {
-        //------------------------------------------
-        // PASO DEL DIAGRAMA:
         // histogramaLocal[cubeta]++
-        //------------------------------------------
 
         histogramaLocal[cubetaLocal]++;
 
-        //------------------------------------------
-        // i = i + 1
-        //------------------------------------------
-
         iLocal++;
       } else {
-        //------------------------------------------
+
         // PASO DEL DIAGRAMA:
         // cubeta = cubeta + 1
-        //------------------------------------------
 
         cubetaLocal++;
 
-        //------------------------------------------
         // Calcular nuevos limInf y limSup
-        //------------------------------------------
 
         limInf = limSup;
         limSup = limInf + ancho;
       }
     }
   }
-
-  /*
-   * =====================================================
-   * BARRERA
-   * =====================================================
-   *
-   * No necesitamos escribir:
-   *
-   * #pragma omp barrier
-   *
-   * porque "parallel for" ya tiene una barrera implicita
-   * al terminar.
-   *
-   * Por lo tanto, en este punto TODOS los trabajadores
-   * ya terminaron.
-   * =====================================================
-   */
-
-  //------------------------------------------------------
-  // PASO DEL DIAGRAMA:
-  // "Unir histogramas locales"
-  //------------------------------------------------------
 
   for (h = 0; h < numHilos; h++) {
     for (c = 0; c < CUBETAS; c++) {
@@ -320,10 +224,6 @@ void HistogramaParalelo(int numHilos) {
 
   free(histogramasLocales);
 }
-
-//==========================================================
-// MAIN
-//==========================================================
 
 int main() {
   int i;
@@ -347,10 +247,6 @@ int main() {
     return 1;
   }
 
-  //------------------------------------------------------
-  // GENERAR TEMPERATURAS
-  //------------------------------------------------------
-
   for (i = 0; i < N; i++) {
     A[i] = -100.0 + (rand() % 20001) / 100.0;
   }
@@ -360,17 +256,13 @@ int main() {
   for (i = 0; i < 20 && i < N; i++)
     printf("%.2f ", A[i]);
 
-  //------------------------------------------------------
   // COPIAR A[] EN temp[]
-  //------------------------------------------------------
 
   for (i = 0; i < N; i++) {
     temp[i] = A[i];
   }
 
-  //------------------------------------------------------
   // MERGE SORT SECUENCIAL
-  //------------------------------------------------------
 
   printf("\n\nOrdenando con Merge Sort...\n");
 
@@ -382,18 +274,14 @@ int main() {
 
   printf("Ordenamiento terminado.\n");
 
-  //------------------------------------------------------
   // En este punto temp[] ya esta completamente ordenado.
-  //------------------------------------------------------
 
   printf("\nPrimeras 20 temperaturas ordenadas:\n\n");
 
   for (i = 0; i < 20 && i < N; i++)
     printf("%.2f ", temp[i]);
 
-  //------------------------------------------------------
   // GUARDAR ARREGLO ORDENADO
-  //------------------------------------------------------
 
   FILE *csv = fopen("temperaturas_ordenadas.csv", "w");
 
@@ -410,9 +298,7 @@ int main() {
 
   fclose(csv);
 
-  //------------------------------------------------------
   // HISTOGRAMA PARALELO
-  //------------------------------------------------------
 
   printf("\n\nConstruyendo histograma con %d hilos...\n", numHilos);
 
@@ -424,22 +310,13 @@ int main() {
 
   printf("Histograma terminado.\n");
 
-  //------------------------------------------------------
   // MOSTRAR HISTOGRAMA GLOBAL
-  //------------------------------------------------------
 
   printf("\nHistograma Global\n\n");
 
   for (i = 0; i < CUBETAS; i++) {
     printf("Cubeta %2d : %d\n", i, histograma[i]);
   }
-
-  //------------------------------------------------------
-  // REDUCTION
-  //
-  // Aqui usamos reduction para comprobar que la suma de
-  // todas las cubetas sea exactamente N.
-  //------------------------------------------------------
 
   long long total = 0;
 
@@ -457,9 +334,7 @@ int main() {
   else
     printf("ERROR: faltan temperaturas por contabilizar.\n");
 
-  //------------------------------------------------------
   // GUARDAR DATOS DEL HISTOGRAMA
-  //------------------------------------------------------
 
   FILE *archivo = fopen("histograma.dat", "w");
 
@@ -483,9 +358,7 @@ int main() {
 
   fclose(archivo);
 
-  //------------------------------------------------------
   // GENERAR GRAFICA CON GNUPLOT
-  //------------------------------------------------------
 
   FILE *gp = popen("gnuplot", "w");
 
@@ -523,9 +396,7 @@ int main() {
 
   pclose(gp);
 
-  //------------------------------------------------------
   // TIEMPOS
-  //------------------------------------------------------
 
   double tiempoMerge = finOrdenamiento - inicioOrdenamiento;
   double tiempoHisto = finHistograma - inicioHistograma;
